@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scam Detection Honeypot</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --bg: #f8fafc;
+            --chat-bg: #ffffff;
+            --user-msg: #3b82f6;
+            --bot-msg: #e2e8f0;
+            --text: #1e293b;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            height: 100vh;
+            color: var(--text);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            height: 100vh;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            background: var(--chat-bg);
+        }
+
+        /* Sidebar - Analysis */
+        .sidebar {
+            width: 300px;
+            background-color: #f1f5f9;
+            padding: 20px;
+            border-right: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+        }
+
+        .stat-title {
+            font-size: 0.875rem;
+            color: #64748b;
+            font-weight: 500;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-value {
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: #334155;
+            word-break: break-all;
+        }
+
+        .stat-value.danger {
+            color: #ef4444;
+            font-weight: 600;
+        }
+
+        /* Chat Area */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            padding: 20px;
+            border-bottom: 1px solid #e2e8f0;
+            background: white;
+        }
+
+        .header h1 {
+            font-size: 1.25rem;
+            margin: 0;
+            color: #0f172a;
+        }
+
+        .header p {
+            margin: 5px 0 0;
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+
+        .messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background-color: white;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            max-width: 80%;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .message.user {
+            align-self: flex-end;
+            align-items: flex-end;
+        }
+
+        .message.bot {
+            align-self: flex-start;
+            align-items: flex-start;
+        }
+
+        .message-content {
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            position: relative;
+        }
+
+        .message.user .message-content {
+            background-color: var(--user-msg);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.bot .message-content {
+            background-color: var(--bot-msg);
+            color: var(--text);
+            border-bottom-left-radius: 4px;
+        }
+
+        .sender-name {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-bottom: 4px;
+            margin-left: 4px;
+        }
+
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--user-msg);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        button {
+            padding: 0 24px;
+            background-color: var(--user-msg);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: #2563eb;
+        }
+
+        button:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Loading indicator */
+        .typing-indicator {
+            display: none;
+            align-self: flex-start;
+            background-color: var(--bot-msg);
+            padding: 12px 16px;
+            border-radius: 16px;
+            border-bottom-left-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .dot {
+            height: 8px;
+            width: 8px;
+            margin: 0 2px;
+            background-color: #64748b;
+            border-radius: 50%;
+            display: inline-block;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+
+        .dot:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .dot:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0);
+            }
+
+            40% {
+                transform: scale(1);
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                height: 200px;
+                border-right: none;
+                border-bottom: 1px solid #e2e8f0;
+                padding: 15px;
+                box-sizing: border-box;
+            }
+
+            .chat-area {
+                height: calc(100vh - 200px);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Sidebar for Scammer Intel -->
+        <div class="sidebar">
+            <h2>🕵️ Analysis</h2>
+
+            <div class="stat-card">
+                <div class="stat-title">Session ID</div>
+                <div class="stat-value" id="sessionId">...</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-title">Status</div>
+                <div class="stat-value" id="scamStatus" style="color: #22c55e;">Monitoring...</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-title">Extracted UPI IDs</div>
+                <div class="stat-value danger" id="intel-upi">-</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-title">Phone Numbers</div>
+                <div class="stat-value danger" id="intel-phone">-</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-title">Bank Accounts</div>
+                <div class="stat-value danger" id="intel-bank">-</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-title">Sus Links</div>
+                <div class="stat-value danger" id="intel-links">-</div>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="chat-area">
+            <div class="header">
+                <h1>Scam Detection Honeypot</h1>
+                <p>Chatting with Persona: <b>Ramesh (68yo, Victim)</b></p>
+            </div>
+
+            <div class="messages" id="messages">
+                <div class="message bot">
+                    <span class="sender-name">Ramesh</span>
+                    <div class="message-content">
+                        Hello? Who is this? My phone is acting strange...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Typing Indicator -->
+            <div class="typing-indicator" id="typing">
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            </div>
+
+            <div class="input-area">
+                <input type="text" id="userInput" placeholder="Type a message as a 'Scammer'..." autocomplete="off">
+                <button onclick="sendMessage()" id="sendBtn">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const sessionId = "session-" + Math.floor(Math.random() * 1000000);
+        document.getElementById('sessionId').innerText = sessionId;
+
+        const API_URL = "http://localhost:8000/scam-detect";
+        const API_KEY = "12345";
+
+        const inputField = document.getElementById('userInput');
+        inputField.addEventListener("keypress", function (event) {
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+        });
+
+        const chatHistory = [];
+
+        async function sendMessage() {
+            const text = inputField.value.trim();
+            if (!text) return;
+
+            // Add User Message
+            addMessage(text, 'user');
+
+            // Update History
+            chatHistory.push({ sender: 'scammer', text: text });
+
+            inputField.value = '';
+            inputField.disabled = true;
+            document.getElementById('sendBtn').disabled = true;
+
+            // Show typing indicator
+            const typing = document.getElementById('typing');
+            typing.style.display = 'block';
+            scrollToBottom();
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': API_KEY
+                    },
+                    body: JSON.stringify({
+                        sessionId: sessionId,
+                        message: {
+                            sender: 'scammer',
+                            text: text,
+                            timestamp: Date.now()
+                        },
+                        conversationHistory: chatHistory, // Send actual history
+                        metadata: {}
+                    })
+                });
+
+                const data = await response.json();
+
+                typing.style.display = 'none';
+
+                if (data.status === 'success') {
+                    addMessage(data.reply, 'bot');
+                    // Add Bot Reply to History
+                    chatHistory.push({ sender: 'Ramesh', text: data.reply });
+
+                    if (data.intelligence) {
+                        updateIntel(data.intelligence);
+                    }
+                } else {
+                    addMessage("Error: " + JSON.stringify(data), 'bot');
+                }
+
+            } catch (error) {
+                typing.style.display = 'none';
+                addMessage("Connection Error. Is the server running?", 'bot');
+                console.error(error);
+            }
+
+            inputField.disabled = false;
+            document.getElementById('sendBtn').disabled = false;
+            inputField.focus();
+        }
+
+        function addMessage(text, type) {
+            const container = document.getElementById('messages');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${type}`;
+
+            const sender = type === 'user' ? 'You' : 'Ramesh';
+
+            msgDiv.innerHTML = `
+                <span class="sender-name">${sender}</span>
+                <div class="message-content">${text}</div>
+            `;
+
+            container.appendChild(msgDiv);
+            scrollToBottom();
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('messages');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function updateIntel(intel) {
+            function updateField(id, items) {
+                const el = document.getElementById(id);
+                if (items && items.length > 0) {
+                    el.innerHTML = items.join('<br>'); // Simple list
+                    document.getElementById('scamStatus').innerText = "⚠️ SCAM DETECTED";
+                    document.getElementById('scamStatus').style.color = "#ef4444";
+                }
+            }
+
+            // Note: The API returns the *extracted* intel for the *current* message in this prototype, 
+            // OR we can make it return the accumulated session intel.
+            // Let's assume the API returns the cumulative intel for simplicity 
+            // or we just append what we find.
+            // For now, let's wait to see how I modify main.py to send this data back.
+            // Assuming data.intelligence structure mirrors the python dict.
+
+            if (intel.upi) updateField('intel-upi', intel.upi);
+            if (intel.phone) updateField('intel-phone', intel.phone);
+            if (intel.bank) updateField('intel-bank', intel.bank);
+            if (intel.links) updateField('intel-links', intel.links);
+        }
+    </script>
+</body>
+
+</html>
